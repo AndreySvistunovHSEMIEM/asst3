@@ -89,6 +89,13 @@ provided by two sets of timers (timing only the kernel execution vs. timing the 
 
 > As I've mentioned in previous task, the difference between a kernel's duration and a full duration (kernel + transferring data between device and host) is noticable. It takes ~95% of overall duration to transfer data from host to device and back. Another important thing is that the 1st test took more only-kernel time than the next 2. I think it's a one-time warm-up: the first launch pays for CUDA context/kernel initialization and the GPU ramping its clocks up from idle, so the following iterations run faster.
 > Another observation: this is an NVIDIA [L4 GPU](https://www.nvidia.com/en-us/data-center/l4/) (300 GB/s memory bandwidth, PCIe Gen4). The two observed bandwidths are each roughly consistent with a *different* component: the kernel-only bandwidth (~300+ GB/s) matches the GPU memory bandwidth (300 GB/s), while the full-process bandwidth (~14-16 GB/s) matches the PCIe bus, not the GPU memory. The latter stays well below the Gen4 peak (~64 GB/s) because of pageable (non-pinned) host memory and chipset overhead. So ~14-16 GB/s isn't "inconsistent" — it's simply the PCIe transfer speed. To speed the transfer up we could use `pinned` (page-locked) host memory, and keep the input arrays resident in GPU memory across many operations so we don't pay the PCIe round-trip every time. 
+> Here is the optimization that transferred paged memory into pinned memory before launching kernel. Measurments:
+```
+Effective BW by CUDA saxpy: 1.148 0.226 ms              [18.691 GB/s]
+Effective BW by CUDA saxpy: 0.913 0.022 ms              [23.501 GB/s]
+Effective BW by CUDA saxpy: 0.958 0.041 ms              [22.396 GB/s]
+```
+> We may notice, that data transferring's became much effective while kernel execution still the same.
 
 ## Part 2: CUDA Warm-Up 2: Parallel Prefix-Sum (10 pts)
 

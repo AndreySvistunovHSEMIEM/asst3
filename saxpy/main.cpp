@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <getopt.h>
 #include <string>
+#include <cuda_runtime.h>
 
 void saxpyCuda(int N, float alpha, float* x, float* y, float* result);
 void printCudaInfo();
@@ -19,7 +20,7 @@ int main(int argc, char** argv)
 {
 
     // default: arrays of 100M numbers
-    int N = 100 * 1000 * 1000;
+    int N = 1200 * 1600;
 
     // parse commandline options ////////////////////////////////////////////
     int opt;
@@ -44,9 +45,27 @@ int main(int argc, char** argv)
     // end parsing of commandline options //////////////////////////////////////
 
     const float alpha = 2.0f;
-    float* xarray = new float[N];
-    float* yarray = new float[N];
-    float* resultarray = new float[N];
+    // float* xarray = new float[N];
+    // float* yarray = new float[N];
+    // float* resultarray = new float[N];
+    float* xarray;
+    float* yarray;
+    float* resultarray; 
+
+    cudaError_t err = cudaMallocHost(&xarray, N * sizeof(float));
+    if (err != cudaSuccess) {
+        fprintf(stderr, "cudaMallosHost failed %s\n", cudaGetErrorString(err));
+    }
+
+    err = cudaMallocHost(&yarray, N * sizeof(float));
+    if (err != cudaSuccess) {
+        fprintf(stderr, "cudaMallosHost failed %s\n", cudaGetErrorString(err));
+    }
+
+    err = cudaMallocHost(&resultarray, N * sizeof(float));
+    if (err != cudaSuccess) {
+        fprintf(stderr, "cudaMallosHost failed %s\n", cudaGetErrorString(err));
+    }
 
     for (int i=0; i<N; i++) {
         xarray[i] = yarray[i] = i % 10;
@@ -60,9 +79,9 @@ int main(int argc, char** argv)
       saxpyCuda(N, alpha, xarray, yarray, resultarray);
     }
 
-    delete [] xarray;
-    delete [] yarray;
-    delete [] resultarray;
+    cudaFreeHost(xarray);
+    cudaFreeHost(yarray);
+    cudaFreeHost(resultarray);
 
     return 0;
 }
