@@ -66,8 +66,29 @@ Note that in your measurements that include the time to transfer to and from the
 **Question 1.** What performance do you observe compared to the sequential CPU-based implementation of
 SAXPY (recall your results from saxpy on Program 5 from Assignment 1)?
 
+> Saxpy implementation:
+```
+[saxpy ispc]:		[6.004] ms	[49.636] GB/s	[6.662] GFLOPS
+[saxpy task ispc]:	[2.196] ms	[135.719] GB/s	[18.216] GFLOPS
+				(2.73x speedup from use of tasks)
+
+```
+> And here is the Cuda's result:
+```
+Running 3 timing tests:
+Effective BW by CUDA saxpy: 1.522 0.211 ms              [14.095 GB/s]
+Effective BW by CUDA saxpy: 1.284 0.059 ms              [16.710 GB/s]
+Effective BW by CUDA saxpy: 1.295 0.056 ms              [16.574 GB/s]
+```
+> So, as I can see, here **Cuda** is much less effective, than **ISPC**, but only in terms of overall duration. It happens, because `saxpy` algorithm has low **compute-to-memory ratio**: given `X`, `y` arrays we load each element, multiply `X[i]` by `alpha` scalar and add scaled `X` to `y`. So, we have 2 arithmetic operations and 3 load operations: load `X[i]`, `y[i]` and save it into `result[i]`. Hence even one-task saxpy beats cuda implementation.
+> Also a difference between full duration and only-kernel is noticable. In the last 2 iterations we have, that transfering data from  `device_result` into `resultarray` is obvious — ~95% of the time takes transferring from device to host memory and vice versa. So, we need to optimize transferring data between **host** and **device** memories — keep input arrays resident in GPU memory across many operations.
+> On the other hand, if we consider only kernel time, than it's really effective. It beats saxpy implementation. So, here we see memory-bound task and we need to optimize this.
+
 **Question 2.** Compare and explain the difference between the results
 provided by two sets of timers (timing only the kernel execution vs. timing the entire process of moving data to the GPU and back in addition to the kernel execution). Are the bandwidth values observed _roughly_ consistent with the reported bandwidths available to the different components of the machine? (You should use the web to track down the memory bandwidth of an NVIDIA T4 GPU. Hint: <https://www.nvidia.com/content/dam/en-zz/Solutions/Data-Center/tesla-t4/t4-tensor-core-datasheet-951643.pdf>. The expected bandwidth of memory bus of AWS is 5.3 GB/s, which does not match that of a 16-lane [PCIe 3.0](https://en.wikipedia.org/wiki/PCI_Express). Several factors prevent peak bandwidth, including CPU motherboard chipset performance and whether or not the host CPU memory used as the source of the transfer is “pinned” — the latter allows the GPU to directly access memory without going through virtual memory address translation. If you are interested, you can find more info here: <https://kth.instructure.com/courses/12406/pages/optimizing-host-device-data-communication-i-pinned-host-memory>)
+
+> As I've mentioned in previous task, the difference between a kernel's duration and a full duration (kernel + transferring data between device and host) is noticable. It takes ~95% of overall duration to transfer data from host to device and back. Another important thing is that the 1st test took more only-kernel time than the next 2. I think it's a one-time warm-up: the first launch pays for CUDA context/kernel initialization and the GPU ramping its clocks up from idle, so the following iterations run faster.
+> Another observation: this is an NVIDIA [L4 GPU](https://www.nvidia.com/en-us/data-center/l4/) (300 GB/s memory bandwidth, PCIe Gen4). The two observed bandwidths are each roughly consistent with a *different* component: the kernel-only bandwidth (~300+ GB/s) matches the GPU memory bandwidth (300 GB/s), while the full-process bandwidth (~14-16 GB/s) matches the PCIe bus, not the GPU memory. The latter stays well below the Gen4 peak (~64 GB/s) because of pageable (non-pinned) host memory and chipset overhead. So ~14-16 GB/s isn't "inconsistent" — it's simply the PCIe transfer speed. To speed the transfer up we could use `pinned` (page-locked) host memory, and keep the input arrays resident in GPU memory across many operations so we don't pay the PCIe round-trip every time. 
 
 ## Part 2: CUDA Warm-Up 2: Parallel Prefix-Sum (10 pts)
 
