@@ -91,6 +91,7 @@ void saxpyCuda(int N, float alpha, float* xarray, float* yarray, float* resultar
    
     // run CUDA kernel. (notice the <<< >>> brackets indicating a CUDA
     // kernel launch) Execution on the GPU occurs here.
+    double startTimeKernel = CycleTimer::currentSeconds();
     saxpy_kernel<<<blocks, threadsPerBlock>>>(N, alpha, device_x, device_y, device_result);
     cudaDeviceSynchronize();
     double endTimeKernel = CycleTimer::currentSeconds();
@@ -107,7 +108,7 @@ void saxpyCuda(int N, float alpha, float* xarray, float* yarray, float* resultar
 		errCode, cudaGetErrorString(errCode));
     }
 
-    double kernelDuration = endTimeKernel - startTime;
+    double kernelDuration = endTimeKernel - startTimeKernel;
     double overallDuration = endTime - startTime;
     printf("Effective BW by CUDA saxpy: %.3f %.3f ms\t\t[%.3f GB/s]\n", 1000.f * overallDuration, 1000.f * kernelDuration, GBPerSec(totalBytes, overallDuration));
 
