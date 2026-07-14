@@ -75,6 +75,10 @@ void saxpyCuda(int N, float alpha, float* xarray, float* yarray, float* resultar
     //
     // https://devblogs.nvidia.com/easy-introduction-cuda-c-and-c/
     //
+    cudaMalloc(&device_x, totalBytes / 3);
+    cudaMalloc(&device_y, totalBytes / 3);
+    cudaMalloc(&device_result, totalBytes / 3);
+
         
     // start timing after allocation of device memory
     double startTime = CycleTimer::currentSeconds();
@@ -82,7 +86,8 @@ void saxpyCuda(int N, float alpha, float* xarray, float* yarray, float* resultar
     //
     // CS149 TODO: copy input arrays to the GPU using cudaMemcpy
     //
-
+    cudaMemcpy(device_x, xarray, totalBytes / 3, cudaMemcpyHostToDevice);
+    cudaMemcpy(device_y, yarray, totalBytes / 3, cudaMemcpyHostToDevice);
    
     // run CUDA kernel. (notice the <<< >>> brackets indicating a CUDA
     // kernel launch) Execution on the GPU occurs here.
@@ -91,8 +96,7 @@ void saxpyCuda(int N, float alpha, float* xarray, float* yarray, float* resultar
     //
     // CS149 TODO: copy result from GPU back to CPU using cudaMemcpy
     //
-
-    
+    cudaMemcpy(resultarray, device_result, totalBytes / 3, cudaMemcpyDeviceToHost);
     // end timing after result has been copied back into host memory
     double endTime = CycleTimer::currentSeconds();
 
@@ -108,7 +112,9 @@ void saxpyCuda(int N, float alpha, float* xarray, float* yarray, float* resultar
     //
     // CS149 TODO: free memory buffers on the GPU using cudaFree
     //
-    
+    cudaFree(device_x);
+    cudaFree(device_y);
+    cudaFree(device_result);
 }
 
 void printCudaInfo() {
