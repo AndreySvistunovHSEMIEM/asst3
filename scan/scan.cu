@@ -63,7 +63,7 @@ __global__ void exclusive_scan_kernel(int* result, int N, int log2_N) {
         result[N - 1] = 0;
     __syncthreads();
 
-    for (int d = log2_N - 1; d >= 0; ++d) {
+    for (int d = log2_N - 1; d >= 0; --d) {
         int stride = 1 << (d + 1);
         int right_index = (idx + 1) * stride - 1;
         int left_index = right_index - (stride >> 1);
