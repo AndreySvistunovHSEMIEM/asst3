@@ -3,6 +3,8 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 
+#include <bit>
+
 #include <driver_functions.h>
 
 #include <thrust/scan.h>
@@ -42,7 +44,40 @@ static inline int nextPow2(int n) {
 // Also, as per the comments in cudaScan(), you can implement an
 // "in-place" scan, since the timing harness makes a copy of input and
 // places it in result
-void exclusive_scan(int* input, int N, int* result)
+__global__ void exclusive_scan_kernel(int* result, int N, int log2_N) {
+    int idx = threadIdx.x;
+    
+    for (int d = 0; d < log2_N; ++d) {
+        int stride = 1 << (d + 1);
+        int right_index = (idx + 1) * stride - 1;
+        int left_index = right_index - (stride >> 1);
+        
+
+        if (right_index < N) {
+            result[right_index] += result[left_index];
+        }
+        __syncthreads();
+    }
+
+    if (idx == 0)
+        result[N - 1] = 0;
+    __syncthreads();
+
+    for (int d = log2_N - 1; d >= 0; ++d) {
+        int stride = 1 << (d + 1);
+        int right_index = (idx + 1) * stride - 1;
+        int left_index = right_index - (stride >> 1);
+
+        if (right_index < N) {
+            int tmp = result[left_index];
+            result[left_index] = result[right_index];
+            result[right_index] += tmp;
+        }
+        __syncthreads();
+    }
+}
+
+void exclusive_scan(int* result, int N)
 {
 
     // CS149 TODO:
@@ -53,8 +88,12 @@ void exclusive_scan(int* input, int N, int* result)
     // on the CPU.  Your implementation will need to make multiple calls
     // to CUDA kernel functions (that you must write) to implement the
     // scan.
-
-
+    // int BLOCK_SIZE = THREADS_PER_BLOCK;
+    // int GRID_SIZE = (N - 1 + BLOCK_SIZE) / BLOCK_SIZE;
+    int rounded_length = nextPow2(N);
+    int log2_N = std::bit_width(static_cast<unsigned int>(rounded_length)) - 1;
+    int BLOCK_SIZE = rounded_length / 2;
+    exclusive_scan_kernel<<<1, BLOCK_SIZE>>>(result, rounded_length, log2_N);
 }
 
 
@@ -68,7 +107,6 @@ void exclusive_scan(int* input, int N, int* result)
 double cudaScan(int* inarray, int* end, int* resultarray)
 {
     int* device_result;
-    int* device_input;
     int N = end - inarray;  
 
     // This code rounds the arrays provided to exclusive_scan up
@@ -83,19 +121,20 @@ double cudaScan(int* inarray, int* end, int* resultarray)
     int rounded_length = nextPow2(end - inarray);
     
     cudaMalloc((void **)&device_result, sizeof(int) * rounded_length);
-    cudaMalloc((void **)&device_input, sizeof(int) * rounded_length);
+    // cudaMalloc((void **)&device_input, sizeof(int) * rounded_length);
 
     // For convenience, both the input and output vectors on the
     // device are initialized to the input values. This means that
     // students are free to implement an in-place scan on the result
     // vector if desired.  If you do this, you will need to keep this
     // in mind when calling exclusive_scan from find_repeats.
-    cudaMemcpy(device_input, inarray, (end - inarray) * sizeof(int), cudaMemcpyHostToDevice);
+    // cudaMemcpy(device_input, inarray, (end - inarray) * sizeof(int), cudaMemcpyHostToDevice);
     cudaMemcpy(device_result, inarray, (end - inarray) * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemset(device_result + (end - inarray), 0, (rounded_length - (end - inarray)) * sizeof(int));
 
     double startTime = CycleTimer::currentSeconds();
 
-    exclusive_scan(device_input, N, device_result);
+    exclusive_scan(device_result, N);
 
     // Wait for completion
     cudaDeviceSynchronize();
