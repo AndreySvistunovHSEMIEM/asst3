@@ -44,38 +44,30 @@ static inline int nextPow2(int n) {
 // Also, as per the comments in cudaScan(), you can implement an
 // "in-place" scan, since the timing harness makes a copy of input and
 // places it in result
-__global__ void exclusive_scan_kernel(int* result, int N, int log2_N) {
-    int idx = threadIdx.x;
-    
-    for (int d = 0; d < log2_N; ++d) {
+
+__global__ void up_sweep(int* result, int d, int num_active) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < num_active) {
         int stride = 1 << (d + 1);
         int right_index = (idx + 1) * stride - 1;
         int left_index = right_index - (stride >> 1);
-        
-
-        if (right_index < N) {
-            result[right_index] += result[left_index];
-        }
-        __syncthreads();
-    }
-
-    if (idx == 0)
-        result[N - 1] = 0;
-    __syncthreads();
-
-    for (int d = log2_N - 1; d >= 0; --d) {
-        int stride = 1 << (d + 1);
-        int right_index = (idx + 1) * stride - 1;
-        int left_index = right_index - (stride >> 1);
-
-        if (right_index < N) {
-            int tmp = result[left_index];
-            result[left_index] = result[right_index];
-            result[right_index] += tmp;
-        }
-        __syncthreads();
+        result[right_index] += result[left_index];
     }
 }
+
+__global__ void down_sweep(int* result, int d, int num_active) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < num_active) {
+        int stride = 1 << (d + 1);
+        int right_index = (idx + 1) * stride - 1;
+        int left_index = right_index - (stride >> 1);
+
+        int tmp = result[left_index];
+        result[left_index] = result[right_index];
+        result[right_index] += tmp;
+    }
+}
+
 
 void exclusive_scan(int* result, int N)
 {
@@ -88,12 +80,24 @@ void exclusive_scan(int* result, int N)
     // on the CPU.  Your implementation will need to make multiple calls
     // to CUDA kernel functions (that you must write) to implement the
     // scan.
-    // int BLOCK_SIZE = THREADS_PER_BLOCK;
-    // int GRID_SIZE = (N - 1 + BLOCK_SIZE) / BLOCK_SIZE;
     int rounded_length = nextPow2(N);
     int log2_N = std::bit_width(static_cast<unsigned int>(rounded_length)) - 1;
-    int BLOCK_SIZE = rounded_length / 2;
-    exclusive_scan_kernel<<<1, BLOCK_SIZE>>>(result, rounded_length, log2_N);
+
+    for (int d = 0; d < log2_N; ++d) {
+        int NUM_THREADS = rounded_length / (1 << (d + 1));
+        int NUM_BLOCKS = (NUM_THREADS - 1 + THREADS_PER_BLOCK) / THREADS_PER_BLOCK;
+        up_sweep<<<NUM_BLOCKS, THREADS_PER_BLOCK>>>(result, d, NUM_THREADS);
+        // printf("%s d: %d\n", cudaGetErrorString(cudaGetLastError()), d);
+    }
+
+    cudaMemset(result + rounded_length - 1, 0, sizeof(int));
+
+    for (int d = log2_N - 1; d >= 0; --d) {
+        int NUM_THREADS = rounded_length / (1 << (d + 1));
+        int NUM_BLOCKS = (NUM_THREADS - 1 + THREADS_PER_BLOCK) / THREADS_PER_BLOCK;
+        down_sweep<<<NUM_BLOCKS, THREADS_PER_BLOCK>>>(result, d, NUM_THREADS);
+        // printf("%s d: %d\n", cudaGetErrorString(cudaGetLastError()), d);
+    }
 }
 
 
@@ -186,6 +190,14 @@ double cudaScanThrust(int* inarray, int* end, int* resultarray) {
 // indices `i` for which `device_input[i] == device_input[i+1]`.
 //
 // Returns the total number of pairs found
+
+__global__ void find_next_repeat(int* input, int* output, int N) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if ((idx + 1) < N) {
+        output[idx] = (input[idx] == input[idx + 1]) ? 1 : 0;
+    }
+}
+
 int find_repeats(int* device_input, int length, int* device_output) {
 
     // CS149 TODO:
@@ -199,8 +211,12 @@ int find_repeats(int* device_input, int length, int* device_output) {
     // exclusive_scan function with them. However, your implementation
     // must ensure that the results of find_repeats are correct given
     // the actual array length.
+    int rounded_length = nextPow2(length);
+    int REPEAT_BLOCK_SIZE = (rounded_length - 1 + THREADS_PER_BLOCK) / THREADS_PER_BLOCK;
+    find_next_repeat<<<REPEAT_BLOCK_SIZE, THREADS_PER_BLOCK>>>(device_input, device_output, length);
+    exclusive_scan(device_output, length);
 
-    return 0; 
+    return device_output[length - 1]; 
 }
 
 

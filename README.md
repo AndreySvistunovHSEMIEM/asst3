@@ -156,11 +156,45 @@ Program Options:
   -?  --help             This message
 ```
 
+> Here is the result of `exclusive_scan`:
+```
+-------------------------
+Scan Score Table:
+-------------------------
+-------------------------------------------------------------------------
+| Element Count   | Ref Time        | Student Time    | Score           |
+-------------------------------------------------------------------------
+| 1000000         | 0.65            | 0.471           | 1.25            |
+| 10000000        | 9.004           | 7.956           | 1.25            |
+| 20000000        | 17.767          | 15.762          | 1.25            |
+| 40000000        | 35.23           | 31.631          | 1.25            |
+-------------------------------------------------------------------------
+|                                   | Total score:    | 5.0/5.0         |
+-------------------------------------------------------------------------
+```
+
 #### Implementing "Find Repeats" Using Prefix Sum
 
 Once you have written `exclusive_scan`, implement the function `find_repeats` in `scan/scan.cu`. This will involve writing more device code, in addition to one or more calls to `exclusive_scan()`. Your code should write the list of repeated elements into the provided output pointer (in device memory), and then return the size of the output list.
 
 When calling your `exclusive_scan` implementation, remember that the contents of the `start` array are copied over to the `output` array. Also, the arrays passed to `exclusive_scan` are assumed to be in `device` memory.
+
+> Here is the result of `find_repeats` kernel:
+```
+-------------------------
+Scan Score Table:
+-------------------------
+-------------------------------------------------------------------------
+| Element Count   | Ref Time        | Student Time    | Score           |
+-------------------------------------------------------------------------
+| 1000000         | 0.651           | 0.463           | 1.25            |
+| 10000000        | 9.0             | 7.915           | 1.25            |
+| 20000000        | 17.835          | 15.886          | 1.25            |
+| 40000000        | 35.231          | 31.597          | 1.25            |
+-------------------------------------------------------------------------
+|                                   | Total score:    | 5.0/5.0         |
+-------------------------------------------------------------------------
+```
 
 **Grading:** We will test your code for correctness and performance on random input arrays.
 
